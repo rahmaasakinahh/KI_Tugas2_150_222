@@ -1,0 +1,59 @@
+name: ki_tugas2_150_222
+services:
+  kdc:
+    image: python:3.12-slim
+    command: ["python", "-u", "kdc.py"]
+    working_dir: /app
+    volumes:
+      - ./aes_manual.py:/app/aes_manual.py:ro
+      - ./protocol.py:/app/protocol.py:ro
+      - ./keys_config.py:/app/keys_config.py:ro
+      - ./kdc.py:/app/kdc.py:ro
+      - ./admin_kdc.py:/app/admin_kdc.py:ro
+      - ./runtime/keys/kdc:/app/private:rw
+    networks:
+      ki_net:
+        ipv4_address: 172.28.77.10
+
+  alice:
+    image: python:3.12-slim
+    command: ["python", "-u", "-c", "import time; time.sleep(86400)"]
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    cap_add:
+      - NET_RAW
+    volumes:
+      - ./aes_manual.py:/app/aes_manual.py:ro
+      - ./protocol.py:/app/protocol.py:ro
+      - ./keys_config.py:/app/keys_config.py:ro
+      - ./alice.py:/app/alice.py:ro
+      - ./capture_packets.py:/app/capture_packets.py:ro
+      - ./runtime/keys/alice:/app/private:rw
+      - ./runtime/captures:/app/captures:rw
+    networks:
+      ki_net:
+        ipv4_address: 172.28.77.11
+
+  bob:
+    image: python:3.12-slim
+    command: ["python", "-u", "-c", "import time; time.sleep(86400)"]
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./aes_manual.py:/app/aes_manual.py:ro
+      - ./protocol.py:/app/protocol.py:ro
+      - ./keys_config.py:/app/keys_config.py:ro
+      - ./bob.py:/app/bob.py:ro
+      - ./runtime/keys/bob:/app/private:rw
+    networks:
+      ki_net:
+        ipv4_address: 172.28.77.12
+
+networks:
+  ki_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.77.0/24
