@@ -126,7 +126,7 @@ class Bob:
             sock = self.peer
             ks = self.session_key if self.ready else None
         if sock is None or ks is None:
-            print('[Bob] Tunggu Alice menyelesaikan langkah 1-5.')
+            print('[Bob] Pesan tidak terkirim: sesi belum aktif. Tunggu Alice terhubung')
             return
         cipher = encrypt_ascii(ks, plain)
         send_frame(sock, {'type': 'CHAT', 'data': cipher}, self.send_guard)

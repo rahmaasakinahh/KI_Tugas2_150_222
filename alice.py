@@ -116,7 +116,7 @@ class Alice:
         with self.guard:
             ks = self.session_key if self.pending_key is None and self.handshake_ok else None
         if ks is None:
-            print('[Alice] Belum boleh chat: sesi tidak aktif.')
+            print('[Alice] Pesan tidak terkirim: sesi belum aktif.')
             return
         cipher = encrypt_ascii(ks, plain)
         send_frame(self.peer, {'type': 'CHAT', 'data': cipher}, self.send_guard)
