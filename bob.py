@@ -36,10 +36,18 @@ class Bob:
                     if typ == 'TICKET':
                         with self.guard:
                             kb = self.master_key
-                        ticket = decrypt_ascii(kb, frame['data'])
+                            self.ready = False
+                            self.pending_key = None
+                            self.pending_nonce = None
+                        try:
+                            ticket = decrypt_ascii(kb, frame['data'])
+                        except (ValueError, KeyError, TypeError) as exc:
+                            self.reject(conn, f'Ticket gagal dibuka dengan Kb: {exc}')
+                            continue
                         values = ticket.split('|')
                         if len(values) != 2 or values[1] != 'Alice' or len(values[0]) != 16 or not values[0].isascii():
-                            raise ValueError('Ticket tidak memuat Ks/identitas Alice yang valid')
+                            self.reject(conn, 'Ticket tidak memuat Ks/identitas Alice yang valid')
+                            continue
                         ks = values[0]
                         n2 = secrets.token_hex(8).upper()
                         with self.guard:
@@ -55,10 +63,18 @@ class Bob:
                             ks = self.pending_key
                             n2 = self.pending_nonce
                         if ks is None or n2 is None:
-                            raise ValueError('RESPONSE tanpa CHALLENGE')
-                        answer = decrypt_ascii(ks, frame['data'])
-                        if not secrets.compare_digest(answer, increment_nonce(n2)):
-                            raise ValueError('f(N2) salah: sesi tidak diotorisasi')
+                            self.reject(conn, 'RESPONSE tanpa CHALLENGE')
+                            continue
+                        try:
+                            answer = decrypt_ascii(ks, frame['data'])
+                        except (ValueError, KeyError, TypeError):
+                            answer = None
+                        if answer is None or not secrets.compare_digest(answer, increment_nonce(n2)):
+                            with self.guard:
+                                self.pending_key = None
+                                self.pending_nonce = None
+                            self.reject(conn, 'f(N2) salah: sesi tidak diotorisasi')
+                            continue
                         # Ready dikirim sebelum chat, agar Alice pindah ke key baru lebih dulu.
                         with self.guard:
                             send_frame(conn, {'type': 'READY'}, self.send_guard)
@@ -71,7 +87,8 @@ class Bob:
                         with self.guard:
                             ks = self.session_key if self.ready else None
                         if ks is None:
-                            raise ValueError('CHAT ditolak sebelum autentikasi')
+                            print('\n[Bob] CHAT diabaikan: sesi belum aktif.', flush=True)
+                            continue
                         plain = decrypt_ascii(ks, frame['data'])
                         print(f'\n[Bob] Ciphertext Alice -> Bob (Hex): {frame["data"]}', flush=True)
                         print(f'[Alice -> Bob] Plaintext ASCII: {plain}', flush=True)
@@ -87,6 +104,11 @@ class Bob:
                     self.ready = False
                     self.pending_key = None
                     self.pending_nonce = None
+            print('\n[Bob] Koneksi dengan Alice terputus. Menunggu Alice terhubung kembali...', flush=True)
+
+    def reject(self, conn, reason):
+        print(f'[Bob] Ditolak: {reason}', flush=True)
+        send_frame(conn, {'type': 'ERROR', 'reason': reason}, self.send_guard)
 
     def server_loop(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:

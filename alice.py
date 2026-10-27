@@ -21,6 +21,8 @@ class Alice:
         self.pending_key = None
         self.handshake_ok = False
         self.connected = False
+        self.last_error = None
+        self.closing = False
 
     def request_key(self):
         n1 = secrets.token_hex(8).upper()
@@ -48,6 +50,7 @@ class Alice:
         with self.guard:
             self.pending_key = ks
             self.handshake_ok = False
+            self.last_error = None
             self.ready_event.clear()
         print(f'[Alice] (3) Meneruskan tiket terenkripsi untuk Bob (Hex): {ticket}', flush=True)
         send_frame(self.peer, {'type': 'TICKET', 'data': ticket}, self.send_guard)
@@ -55,7 +58,7 @@ class Alice:
             raise TimeoutError('Bob belum mengirim READY dalam 15 detik')
         with self.guard:
             if not self.handshake_ok or self.pending_key is not None or self.session_key != ks:
-                raise RuntimeError('Handshake tidak selesai')
+                raise RuntimeError(self.last_error or 'Handshake tidak selesai')
         print('[Alice] AUTENTIKASI SUKSES: Ks aktif untuk chat AES.', flush=True)
 
     def receive_loop(self):
@@ -80,11 +83,18 @@ class Alice:
                         self.pending_key = None
                         self.handshake_ok = True
                         self.ready_event.set()
+                elif typ == 'ERROR':
+                    with self.guard:
+                        self.pending_key = None
+                        self.handshake_ok = False
+                        self.last_error = f"Bob menolak: {frame.get('reason')}"
+                        self.ready_event.set()
                 elif typ == 'CHAT':
                     with self.guard:
-                        ks = self.session_key if self.pending_key is None else None
+                        ks = self.session_key if self.pending_key is None and self.handshake_ok else None
                     if ks is None:
-                        raise ValueError('Chat ditolak karena rekey/handshake belum selesai')
+                        print('\n[Alice] CHAT diabaikan: sesi belum aktif.', flush=True)
+                        continue
                     plain = decrypt_ascii(ks, frame['data'])
                     print(f'\n[Alice] Ciphertext Bob -> Alice (Hex): {frame["data"]}', flush=True)
                     print(f'[Bob -> Alice] Plaintext ASCII: {plain}', flush=True)
@@ -97,6 +107,9 @@ class Alice:
                 self.connected = False
                 self.handshake_ok = False
                 self.ready_event.set()
+            if not self.closing:
+                print('\n[Alice] Koneksi dengan Bob terputus. Tekan Enter untuk keluar, '
+                      'lalu jalankan ulang Alice setelah Bob aktif kembali.', flush=True)
 
     def send_chat(self, plain):
         ascii_plaintext(plain)
@@ -124,14 +137,18 @@ class Alice:
             self.connected = True
             threading.Thread(target=self.receive_loop, daemon=True).start()
             print(f'[Alice] Terhubung ke Bob {BOB_IP}:{BOB_PORT}', flush=True)
-            self.negotiate()
+            try:
+                self.negotiate()
+            except (ValueError, TimeoutError, RuntimeError, OSError) as exc:
+                print('[Alice] Autentikasi awal gagal:', exc)
+                print('Perbaiki key dengan /setkey, lalu jalankan /rekey.')
             print('\nPerintah: teks langsung atau /send pesan, /rekey, /setkey, /status, /quit')
             while self.connected:
                 try:
                     entered = input('Alice> ')
                 except (KeyboardInterrupt, EOFError):
                     break
-                if entered == '/quit':
+                if not self.connected or entered == '/quit':
                     break
                 if entered == '/status':
                     with self.guard:
@@ -156,6 +173,7 @@ class Alice:
                     self.send_chat(text)
                 except (ValueError, OSError, UnicodeError) as exc:
                     print('[Alice] Gagal mengirim:', exc)
+            self.closing = True
 
 
 def main():

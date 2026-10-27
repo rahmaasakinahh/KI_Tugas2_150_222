@@ -72,6 +72,42 @@ docker compose exec alice python -u alice.py
 python -m unittest discover -s tests -v
 ```
 
+## **Menjalankan di Tiga Perangkat**
+
+---
+
+Ketiga perangkat terhubung ke jaringan yang sama. Alamat IP dan lokasi file master key diatur melalui environment variable sehingga kode tidak perlu diubah. File `runtime/keys/<peran>/config.json` hasil `setup_keys.py` disalin ke perangkat masing-masing sebelum program dijalankan (master key dibagikan di luar jaringan).
+
+| Variabel | Fungsi |
+|---|---|
+| `KDC_IP` | IP perangkat KDC |
+| `BOB_IP` | IP perangkat Bob |
+| `KEY_FILE` | Lokasi file master key peran tersebut |
+
+**KDC**
+
+```powershell
+$env:KEY_FILE="runtime/keys/kdc/config.json"
+python kdc.py
+```
+
+**Bob**
+
+```powershell
+$env:KEY_FILE="runtime/keys/bob/config.json"
+python bob.py
+```
+
+**Alice**
+
+```powershell
+$env:KDC_IP="<IP KDC>"; $env:BOB_IP="<IP Bob>"
+$env:KEY_FILE="runtime/keys/alice/config.json"
+python alice.py
+```
+
+Port 5000 (KDC) dan 6000 (Bob) perlu diizinkan pada firewall. Transmisi diamati langsung di Wireshark pada interface Wi-Fi dengan filter `tcp.port == 5000 || tcp.port == 6000`.
+
 ## **Hasil Pengujian**
 
 ---
