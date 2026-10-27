@@ -34,10 +34,18 @@ def main():
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(('0.0.0.0', KDC_PORT))
         server.listen(10)
+        server.settimeout(1.0)
         print('[KDC] Aktif di port 5000; siap melayani Alice.', flush=True)
-        while True:
-            conn, addr = server.accept()
-            threading.Thread(target=process_peer, args=(conn, addr), daemon=True).start()
+        try:
+            while True:
+                try:
+                    conn, addr = server.accept()
+                except socket.timeout:
+                    continue
+                conn.settimeout(None)
+                threading.Thread(target=process_peer, args=(conn, addr), daemon=True).start()
+        except KeyboardInterrupt:
+            print('\n[KDC] Dihentikan.', flush=True)
 
 
 if __name__ == '__main__':

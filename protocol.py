@@ -1,14 +1,15 @@
 """Mengatur pengiriman pesan JSON dan enkripsi AES-128-CBC secara manual."""
 import json
+import os
 import secrets
 import socket
 import string
 import threading
 from aes_manual import AES128, BLOCK_SIZE
 
-KDC_IP = '172.28.77.10'
-ALICE_IP = '172.28.77.11'
-BOB_IP = '172.28.77.12'
+KDC_IP = os.environ.get('KDC_IP', '172.28.77.10')
+ALICE_IP = os.environ.get('ALICE_IP', '172.28.77.11')
+BOB_IP = os.environ.get('BOB_IP', '172.28.77.12')
 KDC_PORT = 5000
 BOB_PORT = 6000
 FRAME_LIMIT = 131072

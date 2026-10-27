@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from protocol import ascii_key
 
-CONFIG = Path('/app/private/config.json')
+CONFIG = Path(os.environ.get('KEY_FILE', '/app/private/config.json'))
 
 
 def read_config(path=CONFIG):

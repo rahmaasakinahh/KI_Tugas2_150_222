@@ -108,3 +108,46 @@ class ProtocolTests(unittest.TestCase):
                     self.assertTrue(b.ready)
                 receiver.join(timeout=2)
             self.assertFalse(errors, errors)
+
+
+    def test_wrong_master_key_keeps_connection(self):
+        ka = 'ABCDefgh12345678'
+        kb = '12345678abcdefgh'
+        keys = {'Ka': ka, 'Kb': kb}
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as skdc, socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sbob:
+            skdc.bind(('127.0.0.1', 0))
+            skdc.listen(2)
+            sbob.bind(('127.0.0.1', 0))
+            sbob.listen(1)
+            kdc_port = skdc.getsockname()[1]
+            bob_port = sbob.getsockname()[1]
+            b = bob.Bob('salahsalahsalah1')
+
+            def kdc_worker():
+                for _ in range(2):
+                    con, addr = skdc.accept()
+                    kdc.process_peer(con, addr, key_loader=lambda: dict(keys))
+
+            def bob_worker():
+                con, addr = sbob.accept()
+                b.connected_peer(con, addr)
+
+            for target in (kdc_worker, bob_worker):
+                threading.Thread(target=target, daemon=True).start()
+
+            with patch.object(alice, 'KDC_IP', '127.0.0.1'), patch.object(alice, 'KDC_PORT', kdc_port):
+                app = alice.Alice(ka)
+                with socket.create_connection(('127.0.0.1', bob_port), timeout=5) as peer:
+                    peer.settimeout(None)
+                    app.peer = peer
+                    app.connected = True
+                    threading.Thread(target=app.receive_loop, daemon=True).start()
+                    with self.assertRaises(RuntimeError) as ctx:
+                        app.negotiate()
+                    self.assertIn('Bob menolak', str(ctx.exception))
+                    self.assertTrue(app.connected)
+                    self.assertFalse(b.ready)
+                    b.master_key = kb
+                    app.negotiate()
+                    self.assertTrue(app.handshake_ok)
+                    self.assertEqual(app.session_key, b.session_key)

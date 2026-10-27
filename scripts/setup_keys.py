@@ -1,4 +1,4 @@
-"""Mengatur pengiriman pesan JSON dan enkripsi AES-128-CBC secara manual."""
+"""Membuat master key Ka dan Kb untuk KDC, Alice, dan Bob saat setup awal."""
 import getpass
 import json
 from pathlib import Path
